@@ -13,6 +13,7 @@
 #include "load_save_png.hpp"
 #include "texture_program.hpp"
 #include "depth_program.hpp"
+#include "bloom_program.hpp"
 
 #include <glm/gtc/type_ptr.hpp>
 
@@ -44,53 +45,97 @@ Load< GLuint > empty_vao(LoadTagDefault, [](){
 	return new GLuint(vao);
 });
 
-Load< GLuint > blur_program(LoadTagDefault, [](){
-	GLuint program = compile_program(
-		//this draws a triangle that covers the entire screen:
-		"#version 330\n"
-		"void main() {\n"
-		"	gl_Position = vec4(4 * (gl_VertexID & 1) - 1,  2 * (gl_VertexID & 2) - 1, 0.0, 1.0);\n"
-		"}\n"
-		,
-		//NOTE on reading screen texture:
-		//texelFetch() gives direct pixel access with integer coordinates, but accessing out-of-bounds pixel is undefined:
-		//	vec4 color = texelFetch(tex, ivec2(gl_FragCoord.xy), 0);
-		//texture() requires using [0,1] coordinates, but handles out-of-bounds more gracefully (using wrap settings of underlying texture):
-		//	vec4 color = texture(tex, gl_FragCoord.xy / textureSize(tex,0));
+Load< GLuint > vignette_program(LoadTagDefault, [](){
+    GLuint program = compile_program(
+            //this draws a triangle that covers the entire screen:
+            "#version 330\n"
+            "void main() {\n"
+            "	gl_Position = vec4(4 * (gl_VertexID & 1) - 1,  2 * (gl_VertexID & 2) - 1, 0.0, 1.0);\n"
+            "}\n"
+            ,
+            //NOTE on reading screen texture:
+            //texelFetch() gives direct pixel access with integer coordinates, but accessing out-of-bounds pixel is undefined:
+            //	vec4 color = texelFetch(tex, ivec2(gl_FragCoord.xy), 0);
+            //texture() requires using [0,1] coordinates, but handles out-of-bounds more gracefully (using wrap settings of underlying texture):
+            //	vec4 color = texture(tex, gl_FragCoord.xy / textureSize(tex,0));
 
-		"#version 330\n"
-		"uniform sampler2D tex;\n"
-		"out vec4 fragColor;\n"
-		"void main() {\n"
-		"	vec2 at = (gl_FragCoord.xy - 0.5 * textureSize(tex, 0)) / textureSize(tex, 0).y;\n"
-		//make blur amount more near the edges and less in the middle:
-		"	float amt = (0.01 * textureSize(tex,0).y) * max(0.0,(length(at) - 0.3)/0.2);\n"
-		//pick a vector to move in for blur using function inspired by:
-		//https://stackoverflow.com/questions/12964279/whats-the-origin-of-this-glsl-rand-one-liner
-		"	vec2 ofs = amt * normalize(vec2(\n"
-		"		fract(dot(gl_FragCoord.xy ,vec2(12.9898,78.233))),\n"
-		"		fract(dot(gl_FragCoord.xy ,vec2(96.3869,-27.5796)))\n"
-		"	));\n"
-		//do a four-pixel average to blur:
-		"	vec4 blur =\n"
-		"		+ 0.25 * texture(tex, (gl_FragCoord.xy + vec2(ofs.x,ofs.y)) / textureSize(tex, 0))\n"
-		"		+ 0.25 * texture(tex, (gl_FragCoord.xy + vec2(-ofs.y,ofs.x)) / textureSize(tex, 0))\n"
-		"		+ 0.25 * texture(tex, (gl_FragCoord.xy + vec2(-ofs.x,-ofs.y)) / textureSize(tex, 0))\n"
-		"		+ 0.25 * texture(tex, (gl_FragCoord.xy + vec2(ofs.y,-ofs.x)) / textureSize(tex, 0))\n"
-		"	;\n"
-		"	fragColor = vec4(blur.rgb, 1.0);\n" //blur;\n"
-		"}\n"
-	);
+            "#version 330\n"
+            "uniform sampler2D tex;\n"
+            "out vec4 fragColor;\n"
+            "void main() {\n"
+            "	vec2 at = (gl_FragCoord.xy - 0.5 * textureSize(tex, 0)) / textureSize(tex, 0).y;\n"
+            //make blur amount more near the edges and less in the middle:
+            "	float amt = (0.01 * textureSize(tex,0).y) * max(0.0,(length(at) - 0.3)/0.2);\n"
+            //pick a vector to move in for blur using function inspired by:
+            //https://stackoverflow.com/questions/12964279/whats-the-origin-of-this-glsl-rand-one-liner
+            "	vec2 ofs = amt * normalize(vec2(\n"
+            "		fract(dot(gl_FragCoord.xy ,vec2(12.9898,78.233))),\n"
+            "		fract(dot(gl_FragCoord.xy ,vec2(96.3869,-27.5796)))\n"
+            "	));\n"
+            //do a four-pixel average to blur:
+            "	vec4 blur =\n"
+            "		+ 0.25 * texture(tex, (gl_FragCoord.xy + vec2(ofs.x,ofs.y)) / textureSize(tex, 0))\n"
+            "		+ 0.25 * texture(tex, (gl_FragCoord.xy + vec2(-ofs.y,ofs.x)) / textureSize(tex, 0))\n"
+            "		+ 0.25 * texture(tex, (gl_FragCoord.xy + vec2(-ofs.x,-ofs.y)) / textureSize(tex, 0))\n"
+            "		+ 0.25 * texture(tex, (gl_FragCoord.xy + vec2(ofs.y,-ofs.x)) / textureSize(tex, 0))\n"
+            "	;\n"
+            "	fragColor = vec4(blur.rgb, 1.0);\n" //blur;\n"
+            "}\n"
+    );
 
-	glUseProgram(program);
+    glUseProgram(program);
 
-	glUniform1i(glGetUniformLocation(program, "tex"), 0);
+    glUniform1i(glGetUniformLocation(program, "tex"), 0);
 
-	glUseProgram(0);
+    glUseProgram(0);
 
-	return new GLuint(program);
+    return new GLuint(program);
 });
 
+Load< GLuint > blur_program(LoadTagDefault, [](){
+    GLuint program = compile_program(
+            //this draws a triangle that covers the entire screen:
+            "#version 330\n"
+            "void main() {\n"
+            "	gl_Position = vec4(4 * (gl_VertexID & 1) - 1,  2 * (gl_VertexID & 2) - 1, 0.0, 1.0);\n"
+            "}\n"
+            ,
+
+            "#version 330\n"
+            "uniform sampler2D tex;\n"
+            "uniform float weight[121] = float[] "
+			"(0.000086, 0.00026, 0.000614, 0.001132, 0.001634, 0.001847, 0.001634, 0.001132, 0.000614, 0.00026, 0.000086,"
+            "0.00026, 0.000784, 0.001848, 0.003408, 0.00492, 0.005561, 0.00492, 0.003408, 0.001848, 0.000784, 0.00026,"
+            "0.000614, 0.001848, 0.004354, 0.00803, 0.011594, 0.013104, 0.011594, 0.00803, 0.004354, 0.001848, 0.000614,"
+            "0.001132, 0.003408, 0.00803, 0.014812, 0.021385, 0.02417, 0.021385, 0.014812, 0.00803, 0.003408, 0.001132,"
+            "0.001634, 0.00492, 0.011594, 0.021385, 0.030875, 0.034896, 0.030875, 0.021385, 0.011594, 0.00492, 0.001634,"
+            "0.001847, 0.005561, 0.013104, 0.02417, 0.034896, 0.03944, 0.034896, 0.02417, 0.013104, 0.005561, 0.001847,"
+            "0.001634, 0.00492, 0.011594, 0.021385, 0.030875, 0.034896, 0.030875, 0.021385, 0.011594, 0.00492, 0.001634,"
+            "0.001132, 0.003408, 0.00803, 0.014812, 0.021385, 0.02417, 0.021385, 0.014812, 0.00803, 0.003408, 0.001132,"
+            "0.000614, 0.001848, 0.004354, 0.00803, 0.011594, 0.013104, 0.011594, 0.00803, 0.004354, 0.001848, 0.000614,"
+            "0.00026, 0.000784, 0.001848, 0.003408, 0.00492, 0.005561, 0.00492, 0.003408, 0.001848, 0.000784, 0.00026,"
+            "0.000086, 0.00026, 0.000614, 0.001132, 0.001634, 0.001847, 0.001634, 0.001132, 0.000614, 0.00026, 0.000086);\n"
+            "out vec4 fragColor;\n"
+            "void main() {\n"
+            "    vec4 color = texture(tex, gl_FragCoord.xy / textureSize(tex, 0));\n"
+            "    vec3 result = vec3(0.0, 0.0, 0.0);\n"
+            "    for(int i = -5; i < 5; ++i) {\n"
+            "        for (int j = -5; j < 5; ++j) {\n"
+            "            result += texture(tex, (gl_FragCoord.xy + vec2(i, j))/ textureSize(tex, 0)).rgb * weight[7*(i+3)+(j+3)];\n"
+            "        }\n"
+            "    }\n"
+            "fragColor = vec4(result, 1.0);"
+            "}\n"
+    );
+
+    glUseProgram(program);
+
+    glUniform1i(glGetUniformLocation(program, "tex"), 0);
+
+    glUseProgram(0);
+
+    return new GLuint(program);
+});
 
 GLuint load_texture(std::string const &filename) {
 	glm::uvec2 size;
@@ -157,6 +202,12 @@ Load< Scene > scene(LoadTagDefault, [](){
 	depth_program_info.vao = *meshes_for_depth_program;
 	depth_program_info.mvp_mat4  = depth_program->object_to_clip_mat4;
 
+	Scene::Object::ProgramInfo bloom_program_info;
+	bloom_program_info.program = bloom_program->program;
+	bloom_program_info.vao = *meshes_for_texture_program;
+	bloom_program_info.mvp_mat4  = bloom_program->object_to_clip_mat4;
+	bloom_program_info.mv_mat4x3 = bloom_program->object_to_light_mat4x3;
+	bloom_program_info.itmv_mat3 = bloom_program->normal_to_light_mat3;
 
 	//load transform hierarchy:
 	ret->load(data_path("vignette.scene"), [&](Scene &s, Scene::Transform *t, std::string const &m){
@@ -172,13 +223,24 @@ Load< Scene > scene(LoadTagDefault, [](){
 		}
 
 		obj->programs[Scene::Object::ProgramTypeShadow] = depth_program_info;
+		obj->programs[Scene::Object::ProgramTypeBloom] = bloom_program_info;
 
 		MeshBuffer::Mesh const &mesh = meshes->lookup(m);
+
 		obj->programs[Scene::Object::ProgramTypeDefault].start = mesh.start;
 		obj->programs[Scene::Object::ProgramTypeDefault].count = mesh.count;
 
-		obj->programs[Scene::Object::ProgramTypeShadow].start = mesh.start;
-		obj->programs[Scene::Object::ProgramTypeShadow].count = mesh.count;
+		obj->programs[Scene::Object::ProgramTypeDefault].start = mesh.start;
+		obj->programs[Scene::Object::ProgramTypeDefault].count = mesh.count;
+
+        if(t->name != "Platform" || t->name != "Pedestal") {
+            obj->programs[Scene::Object::ProgramTypeBloom].start = mesh.start;
+            obj->programs[Scene::Object::ProgramTypeBloom].count = mesh.count;
+
+            obj->programs[Scene::Object::ProgramTypeBloom].start = mesh.start;
+            obj->programs[Scene::Object::ProgramTypeBloom].count = mesh.count;
+        }
+
 	});
 
 	//look up camera parent transform:
@@ -266,6 +328,9 @@ struct Framebuffers {
 	GLuint shadow_depth_tex = 0;
 	GLuint shadow_fb = 0;
 
+    GLuint bloom_color_tex = 0;
+    GLuint bloom_fb = 0;
+
 	void allocate(glm::uvec2 const &new_size, glm::uvec2 const &new_shadow_size) {
 		//allocate full-screen framebuffer:
 		if (size != new_size) {
@@ -273,9 +338,9 @@ struct Framebuffers {
 
 			if (color_tex == 0) glGenTextures(1, &color_tex);
 			glBindTexture(GL_TEXTURE_2D, color_tex);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, size.x, size.y, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, size.x, size.y, 0, GL_RGB, GL_FLOAT, NULL);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);	//GL_NEAREST?
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 			glBindTexture(GL_TEXTURE_2D, 0);
@@ -288,6 +353,7 @@ struct Framebuffers {
 			if (fb == 0) glGenFramebuffers(1, &fb);
 			glBindFramebuffer(GL_FRAMEBUFFER, fb);
 			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color_tex, 0);
+//			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, bloom_color_tex, 0);
 			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_rb);
 			check_fb();
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -327,6 +393,25 @@ struct Framebuffers {
 
 			GL_ERRORS();
 		}
+
+        //allocate bloom frame buffers
+        //https://learnopengl.com/Advanced-Lighting/Bloom
+        if (bloom_color_tex == 0) glGenTextures(1, &bloom_color_tex);
+        glBindTexture(GL_TEXTURE_2D, bloom_color_tex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, size.x, size.y, 0, GL_RGB, GL_FLOAT, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        if (bloom_fb == 0) glGenFramebuffers(1, &bloom_fb);
+        glBindFramebuffer(GL_FRAMEBUFFER, bloom_fb);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bloom_color_tex, 0);
+        check_fb();
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        GL_ERRORS();
 	}
 } fbs;
 
@@ -353,8 +438,6 @@ void GameMode::draw(glm::uvec2 const &drawable_size) {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	GL_ERRORS();
-
-
 
 	//Draw scene to off-screen framebuffer:
 	glBindFramebuffer(GL_FRAMEBUFFER, fbs.fb);
@@ -422,13 +505,58 @@ void GameMode::draw(glm::uvec2 const &drawable_size) {
 
 	GL_ERRORS();
 
+    //Bloom:
+    glBindFramebuffer(GL_FRAMEBUFFER, fbs.bloom_fb);
+    glViewport(0,0,drawable_size.x, drawable_size.y);
+
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    //set up basic OpenGL state:
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendEquation(GL_FUNC_ADD);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    //set up light positions:
+    glUseProgram(bloom_program->program);
+
+    //don't use distant directional light at all (color == 0):
+    glUniform3fv(bloom_program->sun_color_vec3, 1, glm::value_ptr(glm::vec3(0.0f, 0.0f, 0.0f)));
+    glUniform3fv(bloom_program->sun_direction_vec3, 1, glm::value_ptr(glm::normalize(glm::vec3(0.0f, 0.0f,-1.0f))));
+    //use hemisphere light for subtle ambient light:
+    glUniform3fv(bloom_program->sky_color_vec3, 1, glm::value_ptr(glm::vec3(0.2f, 0.2f, 0.3f)));
+    glUniform3fv(bloom_program->sky_direction_vec3, 1, glm::value_ptr(glm::vec3(0.0f, 0.0f, 1.0f)));
+
+    glUniformMatrix4fv(bloom_program->light_to_spot_mat4, 1, GL_FALSE, glm::value_ptr(world_to_spot));
+    glUniform3fv(bloom_program->spot_position_vec3, 1, glm::value_ptr(glm::vec3(spot_to_world[3])));
+    glUniform3fv(bloom_program->spot_direction_vec3, 1, glm::value_ptr(-glm::vec3(spot_to_world[2])));
+    glUniform3fv(bloom_program->spot_color_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 1.0f)));
+    glUniform2fv(bloom_program->spot_outer_inner_vec2, 1, glm::value_ptr(spot_outer_inner));
+
+    scene->draw(camera, Scene::Object::ProgramTypeBloom);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    GL_ERRORS();
+
+//    glActiveTexture(GL_TEXTURE0);
+//    glBindTexture(GL_TEXTURE_2D, fbs.color_tex);
+//    glUseProgram(*vignette_program);
+//    glBindVertexArray(*empty_vao);
+//
+//    glDrawArrays(GL_TRIANGLES, 0, 3);
+//
+//    glActiveTexture(GL_TEXTURE0);
+//    glBindTexture(GL_TEXTURE_2D, 0);
+//
+//    GL_ERRORS();
 
 	//Copy scene from color buffer to screen, performing post-processing effects:
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, fbs.color_tex);
+	glBindTexture(GL_TEXTURE_2D, fbs.bloom_color_tex);
 	glUseProgram(*blur_program);
 	glBindVertexArray(*empty_vao);
-
 	glDrawArrays(GL_TRIANGLES, 0, 3);
 
 	glUseProgram(0);
