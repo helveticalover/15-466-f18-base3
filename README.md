@@ -1,11 +1,11 @@
 # Game Information
 (Note: fill in this portion with information about your game.)
 
-Title: (TODO: your game's title)
+Title: sleep is for the weak
 
-Author: (TODO: your name)
+Author: Tiffany Li
 
-Design Document: [TODO: name of design document](TODO: link to design document)
+Design Document: Based on Musical Bloom (http://graphics.cs.cmu.edu/courses/15-466-f18/game3-designs/ishmaelj/)
 
 Screen Shot:
 
@@ -13,15 +13,27 @@ Screen Shot:
 
 How To Play:
 
-TODO: describe the controls and (if needed) goals/strategy.
+Type. Maximize the window to see the text better.
 
 Changes From The Design Document:
 
-TODO: what did you need to add/remove/modify from the original design? Why?
+I used text instead of shapes as typing cues. I also made this game resemble a typing game more than Simon Says.
 
 Good / Bad / Ugly Code:
 
-TODO: provide examples of code you wrote from this project that you think is good (elegant, simple, useful), bad (hack-y, brittle, unreadable), and ugly (particularly inelegant). Provide a sentence or two of justification for the examples.
+Good:
+ - I made my code modular
+ - I parsed the typing prompts from a text document
+ - I included a lot of sound cues
+
+Bad:
+ - I could have preloaded the text document but I didn't how to do this
+ - Text sequencing code could be cleaned up
+
+ Attributions:
+ - https://freesound.org/people/AlaskaRobotics/sounds/221570/
+ - https://freesound.org/people/Timbre/sounds/440711/
+ - https://freesound.org/people/Timbre/sounds/221682/
 
 # Changes In This Base Code
 

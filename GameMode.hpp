@@ -54,7 +54,7 @@ struct GameMode : public Mode {
 	static constexpr const float XBoundMin = -3.75f;
 	static constexpr const float XBoundMax = 4.0f;
 	static constexpr const float YBound = 3.0f;
-    static constexpr const float Volume = 10.0f;
+    static constexpr const float Volume = 20.0f;
 
 	int current_index = -1;
 	uint32_t current_word = 0;

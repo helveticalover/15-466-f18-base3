@@ -430,9 +430,6 @@ void GameMode::update(float elapsed) {
 	cleared_time += elapsed;
 
 	if (cleared_time > TimeBetweenDisplays && !displayed_text.size() && !letter_queue.size() && current_index < (int)messages.size()) {
-	    std::cout << current_index << std::endl;
-	    std::cout << current_word << std::endl;
-	    std::cout << current_message.size() << std::endl;
         show_string(current_message[current_word]);
 	}
 }
@@ -627,8 +624,6 @@ Scene::Object *GameMode::find_available_letter() {
 //}
 
 void GameMode::show_string(std::string message) {
-
-    std::cout << message << std::endl;
 
 	std::vector<char> letters(message.begin(), message.end());
 	if (!letters.size() || letters.size() > 5) return;
