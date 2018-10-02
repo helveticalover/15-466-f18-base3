@@ -57,16 +57,6 @@ BloomProgram::BloomProgram() {
 		"		float nl = max(0.0, dot(n,l));\n"
 		"		total_light += nl * sun_color;\n"
 		"	}\n"
-		"	{ //spot (point with fov + shadow map) light:\n"
-		"		vec3 l = normalize(spot_position - position);\n"
-		"		float nl = max(0.0, dot(n,l));\n"
-		"		//TODO: look up shadow map\n"
-		"		float d = dot(l,-spot_direction);\n"
-		"		float amt = smoothstep(spot_outer_inner.x, spot_outer_inner.y, d);\n"
-		"		float shadow = textureProj(spot_depth_tex, spotPosition);\n"
-		"		total_light += shadow * nl * amt * spot_color;\n"
-//		"		brightColor = vec4(1.0, 1.0, 1.0, 1.0);\n" //DEBUG: just show bloom
-		"	}\n"
         "   brightColor = vec4(10.0 * color.rgb * total_light, 1.0);\n"
 		"}\n"
 	);

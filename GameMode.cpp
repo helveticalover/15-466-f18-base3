@@ -4,6 +4,7 @@
 #include "Load.hpp"
 #include "MeshBuffer.hpp"
 #include "Scene.hpp"
+#include "Sound.hpp"
 #include "gl_errors.hpp" //helper for dumpping OpenGL error messages
 #include "check_fb.hpp" //helper for checking currently bound OpenGL framebuffer
 #include "read_chunk.hpp" //helper for reading a vector of structures from a file
@@ -22,10 +23,73 @@
 #include <map>
 #include <cstddef>
 #include <random>
+#include <string>
+#include <sstream>
+#include <iterator>
 
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/string_cast.hpp>
+
+#define BUFF_SIZE 5000
+
+static std::random_device rd;
+static std::mt19937 rng(rd());
+static std::ifstream in(data_path("message.txt"));
+
+Load< Sound::Sample > hum(LoadTagDefault, [](){
+    return new Sound::Sample(data_path("hum.wav"));
+});
+
+Load< Sound::Sample > right1(LoadTagDefault, [](){
+    return new Sound::Sample(data_path("right-001.wav"));
+});
+
+Load< Sound::Sample > right2(LoadTagDefault, [](){
+    return new Sound::Sample(data_path("right-002.wav"));
+});
+
+Load< Sound::Sample > right3(LoadTagDefault, [](){
+    return new Sound::Sample(data_path("right-003.wav"));
+});
+
+Load< Sound::Sample > right4(LoadTagDefault, [](){
+    return new Sound::Sample(data_path("right-004.wav"));
+});
+
+Load< Sound::Sample > right5(LoadTagDefault, [](){
+    return new Sound::Sample(data_path("right-005.wav"));
+});
+
+Load< Sound::Sample > right6(LoadTagDefault, [](){
+    return new Sound::Sample(data_path("right-006.wav"));
+});
+
+Load< Sound::Sample > wrong1(LoadTagDefault, [](){
+    return new Sound::Sample(data_path("wrong-001.wav"));
+});
+
+Load< Sound::Sample > wrong2(LoadTagDefault, [](){
+    return new Sound::Sample(data_path("wrong-002.wav"));
+});
+
+Load< Sound::Sample > wrong3(LoadTagDefault, [](){
+    return new Sound::Sample(data_path("wrong-003.wav"));
+});
+
+Load< Sound::Sample > wrong4(LoadTagDefault, [](){
+    return new Sound::Sample(data_path("wrong-004.wav"));
+});
+
+Load< Sound::Sample > wrong5(LoadTagDefault, [](){
+    return new Sound::Sample(data_path("wrong-005.wav"));
+});
+
+Load< Sound::Sample > wrong6(LoadTagDefault, [](){
+    return new Sound::Sample(data_path("wrong-006.wav"));
+});
 
 Load< MeshBuffer > meshes(LoadTagDefault, [](){
-	return new MeshBuffer(data_path("vignette.pnct"));
+	return new MeshBuffer(data_path("glow.pnct"));
 });
 
 Load< GLuint > meshes_for_texture_program(LoadTagDefault, [](){
@@ -185,6 +249,11 @@ Scene::Transform *camera_parent_transform = nullptr;
 Scene::Camera *camera = nullptr;
 Scene::Transform *spot_parent_transform = nullptr;
 Scene::Lamp *spot = nullptr;
+Scene::Object *l0 = nullptr;
+Scene::Object *l1 = nullptr;
+Scene::Object *l2 = nullptr;
+Scene::Object *l3 = nullptr;
+Scene::Object *l4 = nullptr;
 
 Load< Scene > scene(LoadTagDefault, [](){
 	Scene *ret = new Scene;
@@ -210,53 +279,29 @@ Load< Scene > scene(LoadTagDefault, [](){
 	bloom_program_info.itmv_mat3 = bloom_program->normal_to_light_mat3;
 
 	//load transform hierarchy:
-	ret->load(data_path("vignette.scene"), [&](Scene &s, Scene::Transform *t, std::string const &m){
-		Scene::Object *obj = s.new_object(t);
+	ret->load(data_path("glow.scene"), [&](Scene &s, Scene::Transform *t, std::string const &m){
+		bool is_object = false;
+		Scene::Object *obj = nullptr;
 
-		obj->programs[Scene::Object::ProgramTypeDefault] = texture_program_info;
-		if (t->name == "Platform") {
-			obj->programs[Scene::Object::ProgramTypeDefault].textures[0] = *wood_tex;
-		} else if (t->name == "Pedestal") {
-			obj->programs[Scene::Object::ProgramTypeDefault].textures[0] = *marble_tex;
-		} else {
+        if (!l0) { obj = s.new_object(t); l0 = obj;  is_object = true;}
+        else if (!l1) { obj = s.new_object(t); l1 = obj;  is_object = true;}
+        else if (!l2) { obj = s.new_object(t); l2 = obj;  is_object = true;}
+		else if (!l3) { obj = s.new_object(t); l3 = obj;  is_object = true;}
+		else if (!l4) { obj = s.new_object(t); l4 = obj;  is_object = true;}
+
+        if (is_object) {
+			obj->programs[Scene::Object::ProgramTypeDefault] = texture_program_info;
 			obj->programs[Scene::Object::ProgramTypeDefault].textures[0] = *white_tex;
-		}
 
-		obj->programs[Scene::Object::ProgramTypeShadow] = depth_program_info;
-		obj->programs[Scene::Object::ProgramTypeBloom] = bloom_program_info;
+			obj->programs[Scene::Object::ProgramTypeShadow] = depth_program_info;
+			obj->programs[Scene::Object::ProgramTypeBloom] = bloom_program_info;
 
-		MeshBuffer::Mesh const &mesh = meshes->lookup(m);
+			MeshBuffer::Mesh const &mesh = meshes->lookup(m);
 
-		obj->programs[Scene::Object::ProgramTypeDefault].start = mesh.start;
-		obj->programs[Scene::Object::ProgramTypeDefault].count = mesh.count;
-
-		obj->programs[Scene::Object::ProgramTypeDefault].start = mesh.start;
-		obj->programs[Scene::Object::ProgramTypeDefault].count = mesh.count;
-
-        if(t->name != "Platform" || t->name != "Pedestal") {
-            obj->programs[Scene::Object::ProgramTypeBloom].start = mesh.start;
-            obj->programs[Scene::Object::ProgramTypeBloom].count = mesh.count;
-
-            obj->programs[Scene::Object::ProgramTypeBloom].start = mesh.start;
-            obj->programs[Scene::Object::ProgramTypeBloom].count = mesh.count;
+			obj->programs[Scene::Object::ProgramTypeBloom].start = mesh.start;
+			obj->programs[Scene::Object::ProgramTypeBloom].count = mesh.count;
         }
-
 	});
-
-	//look up camera parent transform:
-	for (Scene::Transform *t = ret->first_transform; t != nullptr; t = t->alloc_next) {
-		if (t->name == "CameraParent") {
-			if (camera_parent_transform) throw std::runtime_error("Multiple 'CameraParent' transforms in scene.");
-			camera_parent_transform = t;
-		}
-		if (t->name == "SpotParent") {
-			if (spot_parent_transform) throw std::runtime_error("Multiple 'SpotParent' transforms in scene.");
-			spot_parent_transform = t;
-		}
-
-	}
-	if (!camera_parent_transform) throw std::runtime_error("No 'CameraParent' transform in scene.");
-	if (!spot_parent_transform) throw std::runtime_error("No 'SpotParent' transform in scene.");
 
 	//look up the camera:
 	for (Scene::Camera *c = ret->first_camera; c != nullptr; c = c->alloc_next) {
@@ -267,23 +312,29 @@ Load< Scene > scene(LoadTagDefault, [](){
 	}
 	if (!camera) throw std::runtime_error("No 'Camera' camera in scene.");
 
-	//look up the spotlight:
-	for (Scene::Lamp *l = ret->first_lamp; l != nullptr; l = l->alloc_next) {
-		if (l->transform->name == "Spot") {
-			if (spot) throw std::runtime_error("Multiple 'Spot' objects in scene.");
-			if (l->type != Scene::Lamp::Spot) throw std::runtime_error("Lamp 'Spot' is not a spotlight.");
-			spot = l;
-		}
-	}
-	if (!spot) throw std::runtime_error("No 'Spot' spotlight in scene.");
-
 	return ret;
 });
 
 GameMode::GameMode() {
+    letters.emplace_back(l0);
+    letters.emplace_back(l1);
+    letters.emplace_back(l2);
+    letters.emplace_back(l3);
+    letters.emplace_back(l4);
+
+    std::string str;
+	while (std::getline(in, str)) {
+		messages.emplace_back(str);
+	}
+    in.close();
+
+    reset_letters();
+    show_string("PLAY");
+    loop = hum->play(camera->transform->position, Volume / 2.0f, Sound::Loop);
 }
 
 GameMode::~GameMode() {
+	if (loop) loop->stop();
 }
 
 bool GameMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size) {
@@ -292,24 +343,98 @@ bool GameMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 		return false;
 	}
 
-	if (evt.type == SDL_MOUSEMOTION) {
-		if (evt.motion.state & SDL_BUTTON(SDL_BUTTON_LEFT)) {
-			camera_spin += 5.0f * evt.motion.xrel / float(window_size.x);
-			return true;
+	char pressed = '\0';
+    if (evt.type == SDL_KEYDOWN) {
+        switch (evt.key.keysym.scancode) {
+        	case SDL_SCANCODE_A: pressed = 'A'; break;
+			case SDL_SCANCODE_B: pressed = 'B'; break;
+			case SDL_SCANCODE_C: pressed = 'C'; break;
+			case SDL_SCANCODE_D: pressed = 'D'; break;
+			case SDL_SCANCODE_E: pressed = 'E'; break;
+			case SDL_SCANCODE_F: pressed = 'F'; break;
+			case SDL_SCANCODE_G: pressed = 'G'; break;
+			case SDL_SCANCODE_H: pressed = 'H'; break;
+			case SDL_SCANCODE_I: pressed = 'I'; break;
+			case SDL_SCANCODE_J: pressed = 'J'; break;
+			case SDL_SCANCODE_K: pressed = 'K'; break;
+			case SDL_SCANCODE_L: pressed = 'L'; break;
+			case SDL_SCANCODE_M: pressed = 'M'; break;
+			case SDL_SCANCODE_N: pressed = 'N'; break;
+			case SDL_SCANCODE_O: pressed = 'O'; break;
+			case SDL_SCANCODE_P: pressed = 'P'; break;
+			case SDL_SCANCODE_Q: pressed = 'Q'; break;
+			case SDL_SCANCODE_R: pressed = 'R'; break;
+			case SDL_SCANCODE_S: pressed = 'S'; break;
+			case SDL_SCANCODE_T: pressed = 'T'; break;
+			case SDL_SCANCODE_U: pressed = 'U'; break;
+			case SDL_SCANCODE_V: pressed = 'V'; break;
+			case SDL_SCANCODE_W: pressed = 'W'; break;
+			case SDL_SCANCODE_X: pressed = 'X'; break;
+			case SDL_SCANCODE_Y: pressed = 'Y'; break;
+			case SDL_SCANCODE_Z: pressed = 'Z'; break;
+            default: break;
+        }
+    }
+
+    if (pressed != '\0') {
+    	auto d = displayed_text.end();
+    	auto it = displayed_text.begin();
+    	for (; it != displayed_text.end(); ++it) {
+    		if (it->letter == pressed) {
+    			d = it;
+    			break;
+    		}
+    	}
+
+		if (d == displayed_text.end()) {
+			std::cout << "You made a mistake" << std::endl;
+			play_wrong();
+			++num_wrong;
 		}
-		if (evt.motion.state & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
-			spot_spin += 5.0f * evt.motion.xrel / float(window_size.x);
-			return true;
+		else {
+			play_right();
+			++num_right;
+			hide_letter(d->index);
+            displayed_text.erase(d);
 		}
 
-	}
+		if (!letter_queue.size() && !displayed_text.size()) {
+		    ++current_word;
+		}
+
+		if (!letter_queue.size() && !displayed_text.size() && current_word >= current_message.size()) {
+		    cleared_time = 0.0f;
+		    ++current_index;
+
+		    if (current_index < (int)messages.size()) {
+                current_message.clear();
+                current_word = 0;
+                std::string str;
+                std::istringstream iss(messages[current_index]);
+                while ( getline( iss, str, ' ' ) ) {
+                    current_message.emplace_back(str);
+		        }
+            }
+		}
+
+		return true;
+    }
 
 	return false;
 }
 
 void GameMode::update(float elapsed) {
-	camera_parent_transform->rotation = glm::angleAxis(camera_spin, glm::vec3(0.0f, 0.0f, 1.0f));
-	spot_parent_transform->rotation = glm::angleAxis(spot_spin, glm::vec3(0.0f, 0.0f, 1.0f));
+//	camera_parent_transform->rotation = glm::angleAxis(camera_spin, glm::vec3(0.0f, 0.0f, 1.0f));
+//	spot_parent_transform->rotation = glm::angleAxis(spot_spin, glm::vec3(0.0f, 0.0f, 1.0f));
+
+	cleared_time += elapsed;
+
+	if (cleared_time > TimeBetweenDisplays && !displayed_text.size() && !letter_queue.size() && current_index < (int)messages.size()) {
+	    std::cout << current_index << std::endl;
+	    std::cout << current_word << std::endl;
+	    std::cout << current_message.size() << std::endl;
+        show_string(current_message[current_word]);
+	}
 }
 
 //GameMode will render to some offscreen framebuffer(s).
@@ -418,93 +543,6 @@ struct Framebuffers {
 void GameMode::draw(glm::uvec2 const &drawable_size) {
 	fbs.allocate(drawable_size, glm::uvec2(512, 512));
 
-	//Draw scene to shadow map for spotlight:
-	glBindFramebuffer(GL_FRAMEBUFFER, fbs.shadow_fb);
-	glViewport(0,0,fbs.shadow_size.x, fbs.shadow_size.y);
-
-	glClearColor(1.0f, 0.0f, 1.0f, 0.0f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glEnable(GL_DEPTH_TEST);
-	glDisable(GL_BLEND);
-
-	//render only back faces to shadow map (prevent shadow speckles on fronts of objects):
-	glCullFace(GL_FRONT);
-	glEnable(GL_CULL_FACE);
-
-	scene->draw(spot, Scene::Object::ProgramTypeShadow);
-
-	glDisable(GL_CULL_FACE);
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-	GL_ERRORS();
-
-	//Draw scene to off-screen framebuffer:
-	glBindFramebuffer(GL_FRAMEBUFFER, fbs.fb);
-	glViewport(0,0,drawable_size.x, drawable_size.y);
-
-	camera->aspect = drawable_size.x / float(drawable_size.y);
-
-	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	//set up basic OpenGL state:
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
-	glBlendEquation(GL_FUNC_ADD);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-	//set up light positions:
-	glUseProgram(texture_program->program);
-
-	//don't use distant directional light at all (color == 0):
-	glUniform3fv(texture_program->sun_color_vec3, 1, glm::value_ptr(glm::vec3(0.0f, 0.0f, 0.0f)));
-	glUniform3fv(texture_program->sun_direction_vec3, 1, glm::value_ptr(glm::normalize(glm::vec3(0.0f, 0.0f,-1.0f))));
-	//use hemisphere light for subtle ambient light:
-	glUniform3fv(texture_program->sky_color_vec3, 1, glm::value_ptr(glm::vec3(0.2f, 0.2f, 0.3f)));
-	glUniform3fv(texture_program->sky_direction_vec3, 1, glm::value_ptr(glm::vec3(0.0f, 0.0f, 1.0f)));
-
-	glm::mat4 world_to_spot =
-		//This matrix converts from the spotlight's clip space ([-1,1]^3) into depth map texture coordinates ([0,1]^2) and depth map Z values ([0,1]):
-		glm::mat4(
-			0.5f, 0.0f, 0.0f, 0.0f,
-			0.0f, 0.5f, 0.0f, 0.0f,
-			0.0f, 0.0f, 0.5f, 0.0f,
-			0.5f, 0.5f, 0.5f+0.00001f /* <-- bias */, 1.0f
-		)
-		//this is the world-to-clip matrix used when rendering the shadow map:
-		* spot->make_projection() * spot->transform->make_world_to_local();
-
-	glUniformMatrix4fv(texture_program->light_to_spot_mat4, 1, GL_FALSE, glm::value_ptr(world_to_spot));
-
-	glm::mat4 spot_to_world = spot->transform->make_local_to_world();
-	glUniform3fv(texture_program->spot_position_vec3, 1, glm::value_ptr(glm::vec3(spot_to_world[3])));
-	glUniform3fv(texture_program->spot_direction_vec3, 1, glm::value_ptr(-glm::vec3(spot_to_world[2])));
-	glUniform3fv(texture_program->spot_color_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 1.0f)));
-
-	glm::vec2 spot_outer_inner = glm::vec2(std::cos(0.5f * spot->fov), std::cos(0.85f * 0.5f * spot->fov));
-	glUniform2fv(texture_program->spot_outer_inner_vec2, 1, glm::value_ptr(spot_outer_inner));
-
-	//This code binds texture index 1 to the shadow map:
-	// (note that this is a bit brittle -- it depends on none of the objects in the scene having a texture of index 1 set in their material data; otherwise scene::draw would unbind this texture):
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, fbs.shadow_depth_tex);
-	//The shadow_depth_tex must have these parameters set to be used as a sampler2DShadow in the shader:
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LESS);
-	//NOTE: however, these are parameters of the texture object, not the binding point, so there is no need to set them *each frame*. I'm doing it here so that you are likely to see that they are being set.
-	glActiveTexture(GL_TEXTURE0);
-
-	scene->draw(camera);
-
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glActiveTexture(GL_TEXTURE0);
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-	GL_ERRORS();
-
     //Bloom:
     glBindFramebuffer(GL_FRAMEBUFFER, fbs.bloom_fb);
     glViewport(0,0,drawable_size.x, drawable_size.y);
@@ -522,17 +560,11 @@ void GameMode::draw(glm::uvec2 const &drawable_size) {
     glUseProgram(bloom_program->program);
 
     //don't use distant directional light at all (color == 0):
-    glUniform3fv(bloom_program->sun_color_vec3, 1, glm::value_ptr(glm::vec3(0.0f, 0.0f, 0.0f)));
+    glUniform3fv(bloom_program->sun_color_vec3, 1, glm::value_ptr(glm::vec3(0.98f, 0.76f, 0.42f)));
     glUniform3fv(bloom_program->sun_direction_vec3, 1, glm::value_ptr(glm::normalize(glm::vec3(0.0f, 0.0f,-1.0f))));
     //use hemisphere light for subtle ambient light:
-    glUniform3fv(bloom_program->sky_color_vec3, 1, glm::value_ptr(glm::vec3(0.2f, 0.2f, 0.3f)));
+    glUniform3fv(bloom_program->sky_color_vec3, 1, glm::value_ptr(glm::vec3(0.98f, 0.76f, 0.42f)));
     glUniform3fv(bloom_program->sky_direction_vec3, 1, glm::value_ptr(glm::vec3(0.0f, 0.0f, 1.0f)));
-
-    glUniformMatrix4fv(bloom_program->light_to_spot_mat4, 1, GL_FALSE, glm::value_ptr(world_to_spot));
-    glUniform3fv(bloom_program->spot_position_vec3, 1, glm::value_ptr(glm::vec3(spot_to_world[3])));
-    glUniform3fv(bloom_program->spot_direction_vec3, 1, glm::value_ptr(-glm::vec3(spot_to_world[2])));
-    glUniform3fv(bloom_program->spot_color_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 1.0f)));
-    glUniform2fv(bloom_program->spot_outer_inner_vec2, 1, glm::value_ptr(spot_outer_inner));
 
     scene->draw(camera, Scene::Object::ProgramTypeBloom);
 
@@ -540,19 +572,7 @@ void GameMode::draw(glm::uvec2 const &drawable_size) {
 
     GL_ERRORS();
 
-//    glActiveTexture(GL_TEXTURE0);
-//    glBindTexture(GL_TEXTURE_2D, fbs.color_tex);
-//    glUseProgram(*vignette_program);
-//    glBindVertexArray(*empty_vao);
-//
-//    glDrawArrays(GL_TRIANGLES, 0, 3);
-//
-//    glActiveTexture(GL_TEXTURE0);
-//    glBindTexture(GL_TEXTURE_2D, 0);
-//
-//    GL_ERRORS();
-
-	//Copy scene from color buffer to screen, performing post-processing effects:
+	//Copy scene from color buffer to screen, performing post-processing effects
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, fbs.bloom_color_tex);
 	glUseProgram(*blur_program);
@@ -562,4 +582,109 @@ void GameMode::draw(glm::uvec2 const &drawable_size) {
 	glUseProgram(0);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void GameMode::hide_letter(uint32_t i) {
+	Scene::Object *l = letters[i];
+	l->transform->position = camera->transform->position;
+	l->transform->position.z += 10.0f;
+
+	used_letters[i] = false;
+}
+
+void GameMode::show_letter(uint32_t i, glm::vec2 position, char letter) {
+	if (used_letters[i]) return;
+
+	Scene::Object *l = letters[i];
+
+	std::string letter_name = "glo" + std::string(1, letter);
+	MeshBuffer::Mesh const &mesh = meshes->lookup(letter_name);
+	l->programs[Scene::Object::ProgramTypeBloom].start = mesh.start;
+	l->programs[Scene::Object::ProgramTypeBloom].count = mesh.count;
+	l->transform->position.x = position.x;
+	l->transform->position.y = position.y;
+	l->transform->position.z = 0.0f;
+
+	LetterDisplay d;
+	d.letter = letter;
+	d.index = i;
+	d.obj = l;
+
+	displayed_text.emplace_back(d);
+
+	used_letters[i] = true;
+}
+
+Scene::Object *GameMode::find_available_letter() {
+	for (uint32_t i = 0; i < 5; ++i) {
+		if (!used_letters[i]) return letters[i];
+	}
+	return nullptr;
+}
+
+//void GameMode::show_from_queue() {
+//    if (!letter_queue.size()) return;
+//}
+
+void GameMode::show_string(std::string message) {
+
+    std::cout << message << std::endl;
+
+	std::vector<char> letters(message.begin(), message.end());
+	if (!letters.size() || letters.size() > 5) return;
+
+	uint32_t num_cols = glm::min(float(letters.size()), 5.0f);
+	float spacing = (XBoundMax - XBoundMin) / (num_cols + 1);
+	glm::vec2 range = glm::vec2(-YBound, YBound);
+
+	float prev_y = range.x + (range.y - range.x) / 2.0f;
+	for (uint32_t i = 0; i < letters.size(); ++i) {
+		float x_offset = XBoundMin + spacing * (i + 1);
+
+		float max = glm::min(prev_y + MaxLetterOffset, YBound);
+		float min = glm::max(prev_y - MaxLetterOffset, -YBound);
+		std::uniform_real_distribution<float> dist6(min, max);
+		float y_offset = dist6(rng);
+
+		y_offset = glm::clamp(y_offset, range.x, range.y);
+		glm::vec2 position = glm::vec2(x_offset, y_offset);
+
+		Scene::Object *l = find_available_letter();
+		if (!l) {
+			for (uint32_t j = i; j < letters.size(); ++j) letter_queue.emplace_back(letters[j]);
+			return;
+		}
+
+		show_letter(i, position, letters[i]);
+		prev_y = y_offset;
+	}
+}
+
+void GameMode::reset_letters() {
+    for (uint32_t i = 0; i < 5; ++i) {
+        hide_letter(i);
+        used_letters[i] = false;
+    }
+}
+
+void GameMode::play_right() {
+	switch (num_right % 6) {
+		case 0: right1->play(camera->transform->position, Volume, Sound::Once); break;
+		case 1: right2->play(camera->transform->position, Volume, Sound::Once); break;
+		case 2: right3->play(camera->transform->position, Volume, Sound::Once); break;
+		case 3: right4->play(camera->transform->position, Volume, Sound::Once); break;
+		case 4: right5->play(camera->transform->position, Volume, Sound::Once); break;
+		case 5: right6->play(camera->transform->position, Volume, Sound::Once); break;
+	}
+}
+
+void GameMode::play_wrong() {
+	switch (num_wrong % 6) {
+		case 0: wrong1->play(camera->transform->position, Volume, Sound::Once); break;
+		case 1: wrong2->play(camera->transform->position, Volume, Sound::Once); break;
+		case 2: wrong3->play(camera->transform->position, Volume, Sound::Once); break;
+		case 3: wrong4->play(camera->transform->position, Volume, Sound::Once); break;
+		case 4: wrong5->play(camera->transform->position, Volume, Sound::Once); break;
+		case 5: wrong6->play(camera->transform->position, Volume, Sound::Once); break;
+	}
 }
